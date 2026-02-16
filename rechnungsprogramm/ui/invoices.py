@@ -405,17 +405,17 @@ class InvoicesTab(QWidget):
         self.pos_table.setItem(row, 6, QTableWidgetItem("0,00 €"))
 
         # X-Button zum Entfernen
-        btn_remove = QPushButton("\u2716")
-        btn_remove.setFixedSize(26, 26)
+        btn_remove = QPushButton("X")
         btn_remove.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_remove.setToolTip("Position entfernen")
         btn_remove.setStyleSheet(
             "QPushButton {"
-            "  color: white; background: #dc2626; border: none; border-radius: 13px;"
-            "  font-size: 14px; font-weight: bold;"
+            "  color: #dc2626; background: #fee2e2; border: 1px solid #fca5a5;"
+            "  border-radius: 4px; font-size: 14px; font-weight: bold;"
+            "  padding: 2px 6px;"
             "}"
-            "QPushButton:hover { background: #ef4444; }"
-            "QPushButton:pressed { background: #b91c1c; }"
+            "QPushButton:hover { background: #fecaca; border-color: #f87171; }"
+            "QPushButton:pressed { background: #fca5a5; }"
         )
         btn_remove.clicked.connect(lambda _, r=row: self._remove_position_row(r))
         self.pos_table.setCellWidget(row, 7, btn_remove)
