@@ -155,7 +155,7 @@ class InvoicesTab(QWidget):
         self.pos_table.setColumnWidth(6, 100)
         self.pos_table.setColumnWidth(7, 40)
         self.pos_table.verticalHeader().setDefaultSectionSize(50)
-        self.pos_table.setMinimumHeight(200)
+        self.pos_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         card.add_row(self.pos_table)
 
         btn_layout = QHBoxLayout()
@@ -169,6 +169,20 @@ class InvoicesTab(QWidget):
         card.add_row(btn_widget)
 
         self.main_layout.addWidget(card)
+        self._update_position_table_height()
+
+    def _update_position_table_height(self):
+        """Passt die Tabellenhöhe so an, dass alle Positionszeilen sichtbar sind."""
+        header_height = self.pos_table.horizontalHeader().height()
+        rows_height = sum(self.pos_table.rowHeight(row) for row in range(self.pos_table.rowCount()))
+        frame_height = self.pos_table.frameWidth() * 2
+        scrollbar_height = (
+            self.pos_table.horizontalScrollBar().height()
+            if self.pos_table.horizontalScrollBar().isVisible()
+            else 0
+        )
+        content_height = header_height + rows_height + frame_height + scrollbar_height + 4
+        self.pos_table.setFixedHeight(max(200, content_height))
 
     def _build_rabatt(self):
         card = FormCard("Rabatt (optional)")
@@ -420,6 +434,7 @@ class InvoicesTab(QWidget):
         btn_remove.clicked.connect(lambda _, r=row: self._remove_position_row(r))
         self.pos_table.setCellWidget(row, 7, btn_remove)
 
+        self._update_position_table_height()
         self._update_summen()
 
     def _remove_position_row(self, row: int):
@@ -438,6 +453,7 @@ class InvoicesTab(QWidget):
                     except RuntimeError:
                         pass
                     combo.currentIndexChanged.connect(lambda _, r=r: self._on_article_selected(r))
+            self._update_position_table_height()
             self._update_summen()
 
     def _on_article_selected(self, row: int):
@@ -543,6 +559,7 @@ class InvoicesTab(QWidget):
         self.inp_ausfuehrung.setDate(self.inp_ausfuehrung.minimumDate())
         self.inp_zeitraum.clear()
         self.pos_table.setRowCount(0)
+        self._update_position_table_height()
         self.chk_rabatt.setChecked(False)
         self.inp_rabatt_wert.setValue(0)
         self.lbl_35a.setText("0,00 €")
@@ -686,11 +703,14 @@ class InvoicesTab(QWidget):
             customer = self.customer_repo.get_by_id(inv.customer_id)
             pdf_path = generate_pdf(inv, supplier, customer)
 
+            zugferd_embedded = False
+
             # ZUGFeRD einbetten falls aktiviert
             if self.chk_zugferd.isChecked():
                 try:
                     from export.zugferd_generator import generate_zugferd_pdf
                     generate_zugferd_pdf(inv, supplier, customer, pdf_path)
+                    zugferd_embedded = True
                 except ImportError:
                     show_error(self, "factur-x Bibliothek nicht installiert.\npip install factur-x")
                     return
@@ -704,7 +724,7 @@ class InvoicesTab(QWidget):
                 self.invoice_repo.update_status(inv.id, "versendet")
                 inv.status = "versendet"
 
-            suffix = " (mit ZUGFeRD)" if self.chk_zugferd.isChecked() else ""
+            suffix = " (mit ZUGFeRD)" if zugferd_embedded else ""
             show_success(self, f"PDF exportiert{suffix}: {pdf_path}")
 
             import os
@@ -760,6 +780,7 @@ class InvoicesTab(QWidget):
 
         # Positionen
         self.pos_table.setRowCount(0)
+        self._update_position_table_height()
         for line in invoice.positionen:
             self._add_position_row()
             row = self.pos_table.rowCount() - 1
@@ -796,4 +817,6 @@ class InvoicesTab(QWidget):
             if isinstance(chk_w, QCheckBox):
                 chk_w.setChecked(line.beguenstigt_35a)
 
+        self._update_position_table_height()
         self._update_summen()
+

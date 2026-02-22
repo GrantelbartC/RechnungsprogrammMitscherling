@@ -27,18 +27,14 @@ def generate_zugferd_pdf(
 
     xml_content = _generate_xml(invoice, supplier, customer)
 
-    # PDF einlesen und XML einbetten
-    with open(pdf_path, "rb") as pdf_file:
-        output_pdf = generate_from_file(
-            pdf_file,
-            xml_content.encode("utf-8"),
-            flavor="factur-x",
-            level="en16931",
-        )
-
-    # Überschreibe die PDF mit der ZUGFeRD-Version
-    with open(pdf_path, "wb") as f:
-        f.write(output_pdf)
+    # factur-x schreibt die Datei selbst; deshalb den Dateipfad uebergeben
+    # statt eines read-only File-Handles.
+    generate_from_file(
+        str(pdf_path),
+        xml_content.encode("utf-8"),
+        flavor="factur-x",
+        level="en16931",
+    )
 
     return pdf_path
 
