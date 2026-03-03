@@ -23,6 +23,7 @@ class Supplier:
     bank: Optional[str] = None
     iban: Optional[str] = None
     bic: Optional[str] = None
+    glaeubiger_id: Optional[str] = None
     logo_path: Optional[str] = None
     dankessatz: str = "Vielen Dank für Ihren Auftrag!"
     created_at: Optional[datetime] = None

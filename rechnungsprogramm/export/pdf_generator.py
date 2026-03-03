@@ -1,6 +1,8 @@
 from pathlib import Path
 from datetime import date, timedelta
 from io import BytesIO
+import re
+import unicodedata
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -12,6 +14,8 @@ from reportlab.platypus import (
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from reportlab.pdfgen.canvas import Canvas
+from reportlab.graphics.barcode import qr
+from reportlab.graphics.shapes import Drawing
 
 from models.invoice import Invoice
 from models.supplier import Supplier
@@ -54,6 +58,109 @@ def _fmt_date(d) -> str:
     if isinstance(d, date):
         return d.strftime("%d.%m.%Y")
     return ""
+
+
+def _fmt_postfach(postfach: str | None) -> str:
+    if not postfach:
+        return ""
+    val = postfach.strip()
+    if not val:
+        return ""
+    if val.lower().startswith("postfach"):
+        return val
+    return f"Postfach {val}"
+
+
+_EPC_ALLOWED_CHARS_RE = re.compile(r"[^A-Za-z0-9 /\-?:().,'+]")
+
+
+def _sanitize_epc_text(value: str | None, max_len: int, upper: bool = False) -> str:
+    """
+    Sanitizes text to the EPC QR character set and trims to max_len.
+    """
+    if not value:
+        return ""
+
+    text = value.strip()
+    if not text:
+        return ""
+
+    # Make common German characters deterministic in ASCII.
+    text = (
+        text.replace("Ä", "AE").replace("Ö", "OE").replace("Ü", "UE")
+        .replace("ä", "ae").replace("ö", "oe").replace("ü", "ue")
+        .replace("ß", "ss")
+    )
+
+    # Drop accents and unsupported unicode symbols.
+    text = unicodedata.normalize("NFKD", text)
+    text = text.encode("ascii", "ignore").decode("ascii")
+    text = text.replace("\r", " ").replace("\n", " ")
+    text = _EPC_ALLOWED_CHARS_RE.sub("", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    if upper:
+        text = text.upper()
+
+    return text[:max_len]
+
+
+def _build_epc_qr_payload(invoice: Invoice, supplier: Supplier, amount: float) -> str | None:
+    """
+    Builds EPC QR payload ("GiroCode") for SEPA credit transfer.
+    Returns None if required fields are missing.
+    """
+    iban = _sanitize_epc_text((supplier.iban or "").replace(" ", ""), 34, upper=True)
+    creditor_name = _sanitize_epc_text(supplier.firma, 70)
+    if not iban or not creditor_name:
+        return None
+
+    bic = _sanitize_epc_text((supplier.bic or "").replace(" ", ""), 11, upper=True)
+
+    amount_line = ""
+    if amount > 0:
+        amount_line = f"EUR{amount:.2f}"
+
+    remittance_unstructured = _sanitize_epc_text(
+        f"Rechnung {invoice.rechnungsnr}".strip(),
+        140,
+    )
+
+    info_line = ""
+    if invoice.datum and invoice.zahlungsziel > 0 and not isinstance(invoice.datum, str):
+        due_date = _fmt_date(invoice.datum + timedelta(days=invoice.zahlungsziel))
+        info_line = _sanitize_epc_text(f"Zahlbar bis {due_date}", 70)
+
+    # 12-line EPC payload (EPC069-12, SCT QR).
+    payload_lines = [
+        "BCD",
+        "002",
+        "1",
+        "SCT",
+        bic,
+        creditor_name,
+        iban,
+        amount_line,
+        "",  # Purpose of credit transfer
+        "",  # Structured remittance reference
+        remittance_unstructured,
+        info_line,
+    ]
+    return "\n".join(payload_lines)
+
+
+def _build_epc_qr_drawing(payload: str, size_mm: float = 32.0) -> Drawing:
+    """
+    Creates a scaled ReportLab drawing containing the QR code.
+    """
+    widget = qr.QrCodeWidget(payload)
+    x1, y1, x2, y2 = widget.getBounds()
+    src_w = x2 - x1
+    src_h = y2 - y1
+    size_pt = size_mm * mm
+    drawing = Drawing(size_pt, size_pt, transform=[size_pt / src_w, 0, 0, size_pt / src_h, 0, 0])
+    drawing.add(widget)
+    return drawing
 
 
 def _get_styles():
@@ -128,6 +235,16 @@ def _get_styles():
         "InvHinweis", parent=styles["Normal"],
         fontName="Helvetica-Oblique", fontSize=9, leading=11,
         textColor=COLOR_GRAY,
+    ))
+    styles.add(ParagraphStyle(
+        "InvQrLabel", parent=styles["Normal"],
+        fontName="Helvetica-Bold", fontSize=9, leading=11,
+        textColor=COLOR_TEXT,
+    ))
+    styles.add(ParagraphStyle(
+        "InvQrText", parent=styles["Normal"],
+        fontName="Helvetica", fontSize=9, leading=11,
+        textColor=COLOR_TEXT,
     ))
     styles.add(ParagraphStyle(
         "FooterLabel", parent=styles["Normal"],
@@ -247,6 +364,9 @@ def generate_pdf(invoice: Invoice, supplier: Supplier, customer: Customer) -> Pa
         firm_lines.append(Paragraph(supplier.inhaber, styles["InvGray"]))
     if supplier.strasse:
         firm_lines.append(Paragraph(supplier.strasse, styles["InvGray"]))
+    postfach_text = _fmt_postfach(supplier.postfach)
+    if postfach_text:
+        firm_lines.append(Paragraph(postfach_text, styles["InvGray"]))
     plz_ort = f"{supplier.plz or ''} {supplier.ort or ''}".strip()
     if plz_ort:
         firm_lines.append(Paragraph(plz_ort, styles["InvGray"]))
@@ -278,6 +398,8 @@ def generate_pdf(invoice: Invoice, supplier: Supplier, customer: Customer) -> Pa
     absender_parts = [supplier.firma]
     if supplier.strasse:
         absender_parts.append(supplier.strasse)
+    if postfach_text:
+        absender_parts.append(postfach_text)
     if plz_ort:
         absender_parts.append(plz_ort)
     absender_text = " · ".join(absender_parts)
@@ -458,7 +580,8 @@ def generate_pdf(invoice: Invoice, supplier: Supplier, customer: Customer) -> Pa
         Paragraph(f"<b>{_fmt_eur(summen.brutto)}</b>", styles["InvBrutto"]),
     ])
 
-    sum_table = Table(sum_data, colWidths=[45 * mm, 30 * mm])
+    # Summenblock auf volle Rechnungsbreite wie Positionstabelle ziehen.
+    sum_table = Table(sum_data, colWidths=[USABLE_W - 30 * mm, 30 * mm])
     sum_style = [
         ("ALIGN", (0, 0), (0, -1), "LEFT"),
         ("ALIGN", (1, 0), (1, -1), "RIGHT"),
@@ -468,8 +591,48 @@ def generate_pdf(invoice: Invoice, supplier: Supplier, customer: Customer) -> Pa
         ("LINEABOVE", (0, -1), (-1, -1), 1.5, COLOR_ACCENT),
     ]
     sum_table.setStyle(TableStyle(sum_style))
-    sum_table.hAlign = "RIGHT"
+    sum_table.hAlign = "LEFT"
     elements.append(sum_table)
+
+    # === Zahlungs-QR (EPC / GiroCode) ===
+    qr_payload = _build_epc_qr_payload(invoice, supplier, summen.brutto)
+    if qr_payload:
+        qr_drawing = _build_epc_qr_drawing(qr_payload, size_mm=32.0)
+
+        qr_info_lines = [
+            Paragraph("Zahlung per QR-Code (SEPA)", styles["InvQrLabel"]),
+            Paragraph(
+                f"Empfaenger: {supplier.firma}",
+                styles["InvQrText"],
+            ),
+        ]
+        if supplier.iban:
+            qr_info_lines.append(Paragraph(f"IBAN: {supplier.iban}", styles["InvQrText"]))
+        if supplier.bic:
+            qr_info_lines.append(Paragraph(f"BIC: {supplier.bic}", styles["InvQrText"]))
+        if invoice.rechnungsnr:
+            qr_info_lines.append(
+                Paragraph(f"Verwendungszweck: Rechnung {invoice.rechnungsnr}", styles["InvQrText"])
+            )
+
+        qr_block = Table(
+            [[qr_drawing, qr_info_lines]],
+            colWidths=[36 * mm, USABLE_W - 36 * mm],
+        )
+        qr_block.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ALIGN", (0, 0), (0, 0), "LEFT"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("LEFTPADDING", (1, 0), (1, 0), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            # Push text slightly down so first line aligns with QR top edge.
+            ("TOPPADDING", (1, 0), (1, 0), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        elements.append(Spacer(1, 4 * mm))
+        elements.append(qr_block)
+
     elements.append(Spacer(1, 8 * mm))
 
     # === ZONE 9: §35a-Hinweisbox ===

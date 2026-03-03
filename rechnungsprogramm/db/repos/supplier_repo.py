@@ -23,12 +23,12 @@ class SupplierRepo:
         cursor = self.db.execute(
             """INSERT INTO suppliers (firma, inhaber, strasse, plz, ort, postfach,
                telefon, telefon2, mobil, telefax, email, web,
-               steuernr, ustid, bank, iban, bic, logo_path, dankessatz)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               steuernr, ustid, bank, iban, bic, glaeubiger_id, logo_path, dankessatz)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 s.firma, s.inhaber, s.strasse, s.plz, s.ort, s.postfach,
                 s.telefon, s.telefon2, s.mobil, s.telefax, s.email, s.web,
-                s.steuernr, s.ustid, s.bank, s.iban, s.bic, s.logo_path, s.dankessatz,
+                s.steuernr, s.ustid, s.bank, s.iban, s.bic, s.glaeubiger_id, s.logo_path, s.dankessatz,
             ),
         )
         self.db.commit()
@@ -38,13 +38,13 @@ class SupplierRepo:
         self.db.execute(
             """UPDATE suppliers SET firma=?, inhaber=?, strasse=?, plz=?, ort=?,
                postfach=?, telefon=?, telefon2=?, mobil=?, telefax=?, email=?, web=?,
-               steuernr=?, ustid=?, bank=?, iban=?, bic=?, logo_path=?, dankessatz=?,
+               steuernr=?, ustid=?, bank=?, iban=?, bic=?, glaeubiger_id=?, logo_path=?, dankessatz=?,
                updated_at=CURRENT_TIMESTAMP
                WHERE id=?""",
             (
                 s.firma, s.inhaber, s.strasse, s.plz, s.ort, s.postfach,
                 s.telefon, s.telefon2, s.mobil, s.telefax, s.email, s.web,
-                s.steuernr, s.ustid, s.bank, s.iban, s.bic, s.logo_path, s.dankessatz,
+                s.steuernr, s.ustid, s.bank, s.iban, s.bic, s.glaeubiger_id, s.logo_path, s.dankessatz,
                 s.id,
             ),
         )

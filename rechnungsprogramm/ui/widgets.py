@@ -2,8 +2,10 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QComboBox, QDateEdit, QDoubleSpinBox, QSpinBox, QTextEdit,
     QCheckBox, QPushButton, QMessageBox, QGroupBox, QFormLayout,
+    QCalendarWidget, QDialog,
 )
-from PySide6.QtCore import Qt, QDate, QEvent
+from PySide6.QtCore import Qt, QDate, QEvent, QRegularExpression
+from PySide6.QtGui import QRegularExpressionValidator
 
 
 class NoScrollSpinBox(QSpinBox):
@@ -46,6 +48,93 @@ class NoScrollDateEdit(QDateEdit):
             event.ignore()
         else:
             super().wheelEvent(event)
+
+
+class OptionalDateInput(QWidget):
+    """Optionales Datumsfeld mit Texteingabe und Kalender-Popup."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._minimum_date = QDate(1752, 9, 14)
+        self._date = self._minimum_date
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        self.input = QLineEdit()
+        self.input.setPlaceholderText("TT.MM.JJJJ")
+        self.input.setMaxLength(10)
+        self.input.setValidator(
+            QRegularExpressionValidator(
+                QRegularExpression(r"^(\d{0,2})(\.\d{0,2})?(\.\d{0,4})?$"),
+                self.input,
+            )
+        )
+        self.input.editingFinished.connect(self._commit_text)
+        layout.addWidget(self.input)
+
+        self.btn_calendar = QPushButton("...")
+        self.btn_calendar.setFixedWidth(32)
+        self.btn_calendar.setToolTip("Kalender oeffnen")
+        self.btn_calendar.clicked.connect(self._open_calendar)
+        layout.addWidget(self.btn_calendar)
+
+        self.calendar_popup = QDialog(self, Qt.WindowType.Popup)
+        popup_layout = QVBoxLayout(self.calendar_popup)
+        popup_layout.setContentsMargins(0, 0, 0, 0)
+        self.calendar = QCalendarWidget(self.calendar_popup)
+        self.calendar.setGridVisible(True)
+        self.calendar.clicked.connect(self._on_calendar_selected)
+        popup_layout.addWidget(self.calendar)
+
+    def minimumDate(self) -> QDate:
+        return self._minimum_date
+
+    def date(self) -> QDate:
+        self._commit_text()
+        return self._date
+
+    def setDate(self, qdate: QDate):
+        if not qdate or not qdate.isValid() or qdate == self._minimum_date:
+            self._date = self._minimum_date
+            self.input.clear()
+            return
+
+        self._date = qdate
+        self.input.setText(qdate.toString("dd.MM.yyyy"))
+
+    def _commit_text(self):
+        text = self.input.text().strip()
+
+        if not text:
+            self._date = self._minimum_date
+            self.input.clear()
+            return
+
+        parsed = QDate.fromString(text, "dd.MM.yyyy")
+        if parsed.isValid():
+            self.setDate(parsed)
+            return
+
+        # Ungueltig: letztes gueltiges Datum wiederherstellen.
+        if self._date == self._minimum_date:
+            self.input.clear()
+        else:
+            self.input.setText(self._date.toString("dd.MM.yyyy"))
+
+    def _open_calendar(self):
+        current = self._date if self._date != self._minimum_date else QDate.currentDate()
+        self.calendar.setSelectedDate(current)
+        self.calendar.setCurrentPage(current.year(), current.month())
+        popup_pos = self.mapToGlobal(self.rect().bottomLeft())
+        self.calendar_popup.move(popup_pos)
+        self.calendar_popup.show()
+        self.calendar.setFocus()
+
+    def _on_calendar_selected(self, selected: QDate):
+        self.setDate(selected)
+        self.calendar_popup.hide()
 
 
 class FormCard(QGroupBox):
@@ -153,6 +242,10 @@ def create_date_edit(default_today: bool = True) -> NoScrollDateEdit:
     if default_today:
         date_edit.setDate(QDate.currentDate())
     return date_edit
+
+
+def create_optional_date_input() -> OptionalDateInput:
+    return OptionalDateInput()
 
 
 def create_currency_spinbox(max_val: float = 999999.99) -> NoScrollDoubleSpinBox:

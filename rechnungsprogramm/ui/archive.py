@@ -209,7 +209,7 @@ class ArchiveTab(QWidget):
         from datetime import date
 
         nr_repo = NumberRepo(self.db)
-        new_nr = nr_repo.naechste_nummer(date.today().year)
+        new_nr = nr_repo.naechste_nummer(date.today())
 
         new_inv = Invoice(
             supplier_id=invoice.supplier_id,

@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
     bank TEXT,
     iban TEXT,
     bic TEXT,
+    glaeubiger_id TEXT,
     logo_path TEXT,
     dankessatz TEXT DEFAULT 'Vielen Dank für Ihren Auftrag!',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -152,6 +153,11 @@ class Database:
                 "UPDATE invoices SET zeitraum = zeitraum_von || ' - ' || zeitraum_bis "
                 "WHERE zeitraum_von IS NOT NULL AND zeitraum_bis IS NOT NULL"
             )
+
+        supplier_cursor = self.connection.execute("PRAGMA table_info(suppliers)")
+        supplier_columns = {row[1] for row in supplier_cursor.fetchall()}
+        if "glaeubiger_id" not in supplier_columns:
+            self.connection.execute("ALTER TABLE suppliers ADD COLUMN glaeubiger_id TEXT")
 
     def close(self):
         if self._conn:

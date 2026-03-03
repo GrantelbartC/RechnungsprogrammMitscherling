@@ -114,11 +114,13 @@ class SuppliersTab(QWidget):
         self.inp_bank = QLineEdit()
         self.inp_iban = QLineEdit()
         self.inp_bic = QLineEdit()
+        self.inp_glaeubiger_id = QLineEdit()
         card4.add_field("Steuernummer", self.inp_steuernr)
         card4.add_field("USt-IdNr.", self.inp_ustid)
         card4.add_field("Kreditinstitut", self.inp_bank)
         card4.add_field("IBAN", self.inp_iban)
         card4.add_field("BIC", self.inp_bic)
+        card4.add_field("Gläubiger-Ident.-Nr.", self.inp_glaeubiger_id)
         self.form_layout.addWidget(card4)
 
         # Logo
@@ -199,6 +201,7 @@ class SuppliersTab(QWidget):
         self.inp_bank.setText(s.bank or "")
         self.inp_iban.setText(s.iban or "")
         self.inp_bic.setText(s.bic or "")
+        self.inp_glaeubiger_id.setText(s.glaeubiger_id or "")
         self.inp_dankessatz.setPlainText(s.dankessatz or "")
         self.logo_file_path = s.logo_path
         self._update_logo_preview()
@@ -211,6 +214,7 @@ class SuppliersTab(QWidget):
             self.inp_ort, self.inp_postfach, self.inp_telefon, self.inp_telefon2,
             self.inp_mobil, self.inp_telefax, self.inp_email, self.inp_web,
             self.inp_steuernr, self.inp_ustid, self.inp_bank, self.inp_iban, self.inp_bic,
+            self.inp_glaeubiger_id,
         ]:
             inp.clear()
         self.inp_dankessatz.setPlainText("Vielen Dank für Ihren Auftrag!")
@@ -236,6 +240,7 @@ class SuppliersTab(QWidget):
         s.bank = self.inp_bank.text().strip() or None
         s.iban = self.inp_iban.text().strip() or None
         s.bic = self.inp_bic.text().strip() or None
+        s.glaeubiger_id = self.inp_glaeubiger_id.text().strip() or None
         s.dankessatz = self.inp_dankessatz.toPlainText().strip()
         s.logo_path = self.logo_file_path
         return s

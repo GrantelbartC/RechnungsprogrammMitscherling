@@ -19,7 +19,7 @@ from models.supplier import Supplier
 from models.customer import Customer
 from ui.widgets import (
     FormCard, show_success, show_error,
-    create_date_edit, create_currency_spinbox, create_mwst_combo,
+    create_date_edit, create_optional_date_input, create_currency_spinbox, create_mwst_combo,
     NoScrollDoubleSpinBox, NoScrollSpinBox,
 )
 from utils.calculations import berechne_rechnung, berechne_position
@@ -118,10 +118,8 @@ class InvoicesTab(QWidget):
         card.add_field("Objekt / WEG", self.inp_objekt)
 
         # Ausführungsdatum
-        self.inp_ausfuehrung = create_date_edit(default_today=False)
-        self.inp_ausfuehrung.setSpecialValueText(" ")
+        self.inp_ausfuehrung = create_optional_date_input()
         self.inp_ausfuehrung.setDate(self.inp_ausfuehrung.minimumDate())
-        self.inp_ausfuehrung.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         card.add_field("Tag der Ausführung", self.inp_ausfuehrung)
 
         # Zeitraum
@@ -367,8 +365,7 @@ class InvoicesTab(QWidget):
         self.lbl_customer_info.setText("")
 
     def _generate_number(self):
-        jahr = date.today().year
-        nr = self.number_repo.naechste_nummer(jahr)
+        nr = self.number_repo.naechste_nummer(date.today())
         self.inp_rechnungsnr.setText(nr)
 
     def _add_position_row(self):
