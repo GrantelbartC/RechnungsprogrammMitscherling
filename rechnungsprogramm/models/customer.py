@@ -16,6 +16,7 @@ class Customer:
     ort: Optional[str] = None
     email: Optional[str] = None
     telefon: Optional[str] = None
+    notizen: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

@@ -194,6 +194,8 @@ class ArchiveTab(QWidget):
                            lambda: self._set_status(invoice_id, "versendet"))
 
         menu.addSeparator()
+        menu.addAction("Zahlungserinnerung erstellen", lambda: self._create_mahnung(invoice))
+        menu.addSeparator()
         menu.addAction("Duplizieren", lambda: self._duplicate(invoice))
         menu.addSeparator()
         menu.addAction("Löschen", lambda: self._delete(invoice_id))
@@ -239,6 +241,12 @@ class ArchiveTab(QWidget):
             self.invoice_repo.delete(invoice_id)
             self._load_table()
             show_success(self, "Rechnung gelöscht.")
+
+    def _create_mahnung(self, invoice: Invoice):
+        main_window = self.window()
+        if hasattr(main_window, "tabs") and hasattr(main_window, "mahnwesen_tab"):
+            main_window.mahnwesen_tab.load_invoice(invoice)
+            main_window.tabs.setCurrentWidget(main_window.mahnwesen_tab)
 
     def on_search(self):
         self.search_bar.search_input.setFocus()

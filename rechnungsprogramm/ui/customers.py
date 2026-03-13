@@ -1,7 +1,10 @@
+from pathlib import Path
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
-    QSplitter, QScrollArea, QComboBox,
+    QSplitter, QScrollArea, QComboBox, QTextEdit,
+    QDialog, QFileDialog, QDialogButtonBox, QProgressDialog,
 )
 from PySide6.QtCore import Qt
 
@@ -13,6 +16,63 @@ from ui.widgets import (
     create_anrede_combo,
 )
 
+
+# ---------------------------------------------------------------------------
+# Import-Vorschau-Dialog
+# ---------------------------------------------------------------------------
+
+class _ImportPreviewDialog(QDialog):
+    """Zeigt geparste Kunden-DatensÃ¤tze zur Kontrolle vor dem Import."""
+
+    HEADERS = ["Name / Firma", "StraÃŸe", "PLZ", "Ort", "Notizen (Objekt+TÃ¤tigkeiten)"]
+
+    def __init__(self, customers: list[Customer], parent=None):
+        super().__init__(parent)
+        self.customers = customers
+        self.setWindowTitle("Kunden-Import â€“ Vorschau")
+        self.setMinimumSize(900, 520)
+
+        layout = QVBoxLayout(self)
+
+        info = QLabel(
+            f"<b>{len(customers)} DatensÃ¤tze</b> wurden aus der Datei gelesen. "
+            'Bitte die Vorschau prÃ¼fen, dann auf "Importieren" klicken.'
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        self.table = QTableWidget(len(customers), len(self.HEADERS))
+        self.table.setHorizontalHeaderLabels(self.HEADERS)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+
+        for row, c in enumerate(customers):
+            name = c.firma or f"{c.vorname} {c.nachname}".strip() or "â€“"
+            self.table.setItem(row, 0, QTableWidgetItem(name))
+            self.table.setItem(row, 1, QTableWidgetItem(c.strasse or ""))
+            self.table.setItem(row, 2, QTableWidgetItem(c.plz or ""))
+            self.table.setItem(row, 3, QTableWidgetItem(c.ort or ""))
+            self.table.setItem(row, 4, QTableWidgetItem(c.notizen or ""))
+
+        layout.addWidget(self.table)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(
+            f"Importieren ({len(customers)})"
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Abbrechen")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+
+# ---------------------------------------------------------------------------
+# Kunden-Tab
+# ---------------------------------------------------------------------------
 
 class CustomersTab(QWidget):
     def __init__(self, db: Database):
@@ -35,6 +95,11 @@ class CustomersTab(QWidget):
         header_layout.addWidget(title)
         header_layout.addStretch()
 
+        btn_import = QPushButton("â†‘ Import")
+        btn_import.setToolTip("Kunden aus Excel/LibreOffice/CSV importieren")
+        btn_import.clicked.connect(self._on_import)
+        header_layout.addWidget(btn_import)
+
         btn_new = QPushButton("+ Neu")
         btn_new.setProperty("cssClass", "primary")
         btn_new.clicked.connect(self.on_new)
@@ -55,7 +120,7 @@ class CustomersTab(QWidget):
         self.table.doubleClicked.connect(self._on_table_double_click)
         left_layout.addWidget(self.table)
 
-        # Linke Seite: Formular
+        # Rechte Seite: Formular
         left_scroll = QScrollArea()
         left_scroll.setWidgetResizable(True)
         left_widget = QWidget()
@@ -66,7 +131,7 @@ class CustomersTab(QWidget):
         form_title.setProperty("cssClass", "subheading")
         form_layout.addWidget(form_title)
 
-        card1 = FormCard("Persönliche Daten")
+        card1 = FormCard("PersÃ¶nliche Daten")
         self.inp_anrede = create_anrede_combo()
         self.inp_titel = QLineEdit()
         self.inp_vorname = QLineEdit()
@@ -84,7 +149,7 @@ class CustomersTab(QWidget):
         self.inp_plz = QLineEdit()
         self.inp_plz.setMaximumWidth(80)
         self.inp_ort = QLineEdit()
-        card2.add_field("Straße", self.inp_strasse)
+        card2.add_field("StraÃŸe", self.inp_strasse)
         plz_ort = QHBoxLayout()
         plz_ort.addWidget(self.inp_plz)
         plz_ort.addWidget(self.inp_ort)
@@ -100,12 +165,19 @@ class CustomersTab(QWidget):
         card3.add_field("Telefon", self.inp_telefon)
         form_layout.addWidget(card3)
 
+        card4 = FormCard("Notizen (Objekt + TÃ¤tigkeiten)")
+        self.inp_notizen = QTextEdit()
+        self.inp_notizen.setMaximumHeight(120)
+        self.inp_notizen.setPlaceholderText("z. B. Musterstr. 1 - Dacharbeiten, Fassade")
+        card4.add_row(self.inp_notizen)
+        form_layout.addWidget(card4)
+
         # Buttons
         btn_layout = QHBoxLayout()
         btn_save = QPushButton("Speichern")
         btn_save.setProperty("cssClass", "primary")
         btn_save.clicked.connect(self.on_save)
-        btn_delete = QPushButton("Löschen")
+        btn_delete = QPushButton("LÃ¶schen")
         btn_delete.setProperty("cssClass", "danger")
         btn_delete.clicked.connect(self._on_delete)
         btn_layout.addStretch()
@@ -120,6 +192,10 @@ class CustomersTab(QWidget):
         splitter.setSizes([450, 450])
 
         self._load_table()
+
+    # ------------------------------------------------------------------
+    # Tabelle
+    # ------------------------------------------------------------------
 
     def _load_table(self, customers: list[Customer] | None = None):
         if customers is None:
@@ -149,6 +225,10 @@ class CustomersTab(QWidget):
             if customer:
                 self._load_form(customer)
 
+    # ------------------------------------------------------------------
+    # Formular
+    # ------------------------------------------------------------------
+
     def _load_form(self, c: Customer):
         self.current_customer = c
         idx = self.inp_anrede.findText(c.anrede or "")
@@ -162,6 +242,7 @@ class CustomersTab(QWidget):
         self.inp_ort.setText(c.ort or "")
         self.inp_email.setText(c.email or "")
         self.inp_telefon.setText(c.telefon or "")
+        self.inp_notizen.setPlainText(c.notizen or "")
 
     def _clear_form(self):
         self.current_customer = None
@@ -171,6 +252,7 @@ class CustomersTab(QWidget):
             self.inp_strasse, self.inp_plz, self.inp_ort, self.inp_email, self.inp_telefon,
         ]:
             inp.clear()
+        self.inp_notizen.clear()
 
     def _read_form(self) -> Customer:
         c = self.current_customer or Customer()
@@ -184,7 +266,12 @@ class CustomersTab(QWidget):
         c.ort = self.inp_ort.text().strip() or None
         c.email = self.inp_email.text().strip() or None
         c.telefon = self.inp_telefon.text().strip() or None
+        c.notizen = self.inp_notizen.toPlainText().strip() or None
         return c
+
+    # ------------------------------------------------------------------
+    # Aktionen
+    # ------------------------------------------------------------------
 
     def on_new(self):
         self._clear_form()
@@ -208,7 +295,62 @@ class CustomersTab(QWidget):
             self.repo.delete(self.current_customer.id)
             self._clear_form()
             self._load_table()
-            show_success(self, "Kunde gelöscht.")
+            show_success(self, "Kunde gelÃ¶scht.")
 
     def on_search(self):
         self.search_bar.search_input.setFocus()
+
+    # ------------------------------------------------------------------
+    # Kunden-Import
+    # ------------------------------------------------------------------
+
+    def _on_import(self):
+        path_str, _ = QFileDialog.getOpenFileName(
+            self,
+            "Kundenliste Ã¶ffnen",
+            "",
+            "Tabellen (*.xlsx *.xlsm *.ods *.csv *.tsv);;Alle Dateien (*)",
+        )
+        if not path_str:
+            return
+
+        path = Path(path_str)
+        try:
+            from utils.customer_import import read_file
+            customers = read_file(path)
+        except ImportError as e:
+            show_error(self, str(e))
+            return
+        except Exception as e:
+            show_error(self, f"Datei konnte nicht gelesen werden:\n{e}")
+            return
+
+        if not customers:
+            show_error(self, "Es wurden keine DatensÃ¤tze in der Datei gefunden.")
+            return
+
+        dlg = _ImportPreviewDialog(customers, self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        progress = QProgressDialog("Importiere Kundenâ€¦", None, 0, len(customers), self)
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+
+        imported = 0
+        errors = 0
+        for i, c in enumerate(customers):
+            progress.setValue(i)
+            try:
+                self.repo.create(c)
+                imported += 1
+            except Exception:
+                errors += 1
+
+        progress.setValue(len(customers))
+        self._load_table()
+
+        msg = f"{imported} Kunden erfolgreich importiert."
+        if errors:
+            msg += f"\n{errors} DatensÃ¤tze konnten nicht importiert werden."
+        show_success(self, msg)

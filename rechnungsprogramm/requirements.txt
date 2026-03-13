@@ -3,3 +3,4 @@ reportlab>=4.1
 Pillow>=10.0
 lxml>=5.0
 factur-x>=3.0
+fints>=5.0

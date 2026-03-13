@@ -55,8 +55,8 @@ class InvoiceRepo:
             """INSERT INTO invoices (supplier_id, customer_id, rechnungsnr, datum,
                betreff, objekt_weg, ausfuehrungsdatum, zeitraum,
                zahlungsziel, rabatt_typ, rabatt_wert, lohnanteil_35a, geraeteanteil_35a,
-               dankessatz, hinweise, status, netto, mwst_betrag, brutto, pdf_path)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               dankessatz, hinweise, status, bezahlt_am, netto, mwst_betrag, brutto, pdf_path)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 inv.supplier_id, inv.customer_id, inv.rechnungsnr,
                 inv.datum.isoformat() if inv.datum else None,
@@ -66,6 +66,7 @@ class InvoiceRepo:
                 inv.zahlungsziel, inv.rabatt_typ, inv.rabatt_wert,
                 inv.lohnanteil_35a, inv.geraeteanteil_35a,
                 inv.dankessatz, inv.hinweise, inv.status,
+                inv.bezahlt_am.isoformat() if inv.bezahlt_am else None,
                 inv.netto, inv.mwst_betrag, inv.brutto, inv.pdf_path,
             ),
         )
@@ -79,7 +80,7 @@ class InvoiceRepo:
             """UPDATE invoices SET supplier_id=?, customer_id=?, rechnungsnr=?, datum=?,
                betreff=?, objekt_weg=?, ausfuehrungsdatum=?, zeitraum=?,
                zahlungsziel=?, rabatt_typ=?, rabatt_wert=?, lohnanteil_35a=?,
-               geraeteanteil_35a=?, dankessatz=?, hinweise=?, status=?,
+               geraeteanteil_35a=?, dankessatz=?, hinweise=?, status=?, bezahlt_am=?,
                netto=?, mwst_betrag=?, brutto=?, pdf_path=?,
                updated_at=CURRENT_TIMESTAMP
                WHERE id=?""",
@@ -92,6 +93,7 @@ class InvoiceRepo:
                 inv.zahlungsziel, inv.rabatt_typ, inv.rabatt_wert,
                 inv.lohnanteil_35a, inv.geraeteanteil_35a,
                 inv.dankessatz, inv.hinweise, inv.status,
+                inv.bezahlt_am.isoformat() if inv.bezahlt_am else None,
                 inv.netto, inv.mwst_betrag, inv.brutto, inv.pdf_path,
                 inv.id,
             ),
@@ -104,6 +106,23 @@ class InvoiceRepo:
         self.db.execute(
             "UPDATE invoices SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
             (status, invoice_id),
+        )
+        self.db.commit()
+
+    def get_matchable_invoices(self) -> list[Invoice]:
+        rows = self.db.execute(
+            "SELECT * FROM invoices WHERE status = 'versendet' ORDER BY datum DESC, id DESC"
+        ).fetchall()
+        return [self._row_to_invoice(r) for r in rows]
+
+    def mark_paid(self, invoice_id: int, bezahlt_am: date | None):
+        self.db.execute(
+            """UPDATE invoices
+               SET status = 'bezahlt',
+                   bezahlt_am = ?,
+                   updated_at = CURRENT_TIMESTAMP
+               WHERE id = ?""",
+            (bezahlt_am.isoformat() if bezahlt_am else None, invoice_id),
         )
         self.db.commit()
 

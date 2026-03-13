@@ -2,20 +2,19 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Optional
 
-from models.enums import InvoiceStatus
+from models.enums import KVStatus
 
 
 @dataclass
-class InvoiceLine:
+class KVLine:
     id: Optional[int] = None
-    invoice_id: Optional[int] = None
+    kv_id: Optional[int] = None
     position: int = 0
     article_id: Optional[int] = None
     beschreibung: str = ""
     menge: float = 1.0
     einzelpreis: float = 0.0
     mwst: float = 19.0
-    beguenstigt_35a: bool = False
     gesamt_netto: float = 0.0
 
     def berechne_gesamt(self):
@@ -23,29 +22,24 @@ class InvoiceLine:
 
 
 @dataclass
-class Invoice:
+class Kostenvoranschlag:
     id: Optional[int] = None
     supplier_id: Optional[int] = None
     customer_id: Optional[int] = None
-    rechnungsnr: str = ""
+    kvnr: str = ""
     datum: Optional[date] = None
     betreff: Optional[str] = None
     objekt_weg: Optional[str] = None
-    ausfuehrungsdatum: Optional[date] = None
-    zeitraum: Optional[str] = None
-    zahlungsziel: int = 14
+    gueltig_tage: int = 30
     rabatt_typ: Optional[str] = None
     rabatt_wert: float = 0.0
-    lohnanteil_35a: float = 0.0
-    geraeteanteil_35a: float = 0.0
     dankessatz: Optional[str] = None
     hinweise: Optional[str] = None
-    status: str = InvoiceStatus.ENTWURF.value
-    bezahlt_am: Optional[date] = None
+    status: str = KVStatus.OFFEN.value
     netto: float = 0.0
     mwst_betrag: float = 0.0
     brutto: float = 0.0
     pdf_path: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    positionen: list[InvoiceLine] = field(default_factory=list)
+    positionen: list[KVLine] = field(default_factory=list)

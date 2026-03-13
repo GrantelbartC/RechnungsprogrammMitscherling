@@ -34,11 +34,11 @@ class CustomerRepo:
     def create(self, c: Customer) -> int:
         cursor = self.db.execute(
             """INSERT INTO customers (anrede, titel, vorname, nachname, firma,
-               strasse, plz, ort, email, telefon)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               strasse, plz, ort, email, telefon, notizen)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 c.anrede, c.titel, c.vorname, c.nachname, c.firma,
-                c.strasse, c.plz, c.ort, c.email, c.telefon,
+                c.strasse, c.plz, c.ort, c.email, c.telefon, c.notizen,
             ),
         )
         self.db.commit()
@@ -47,12 +47,12 @@ class CustomerRepo:
     def update(self, c: Customer):
         self.db.execute(
             """UPDATE customers SET anrede=?, titel=?, vorname=?, nachname=?, firma=?,
-               strasse=?, plz=?, ort=?, email=?, telefon=?,
+               strasse=?, plz=?, ort=?, email=?, telefon=?, notizen=?,
                updated_at=CURRENT_TIMESTAMP
                WHERE id=?""",
             (
                 c.anrede, c.titel, c.vorname, c.nachname, c.firma,
-                c.strasse, c.plz, c.ort, c.email, c.telefon,
+                c.strasse, c.plz, c.ort, c.email, c.telefon, c.notizen,
                 c.id,
             ),
         )
